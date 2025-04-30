@@ -6,18 +6,7 @@
 #include "pc.hpp"
 #include "battle.hpp"
 #include "nullpo.hpp"
-
-// Define custom VIP status icons
-// Use values that don't conflict with existing icons
-#define SI_VIP_BRONZE 893
-#define SI_VIP_SILVER 894
-#define SI_VIP_GOLD 895
-
-// Define custom VIP status change types
-// Use values that don't conflict with existing types in status.hpp
-#define SC_VIP_BRONZE (sc_type)622
-#define SC_VIP_SILVER (sc_type)623
-#define SC_VIP_GOLD (sc_type)624
+#include "custom_status_icons.hpp"
 
 // Initialization function to be called at server startup
 void custom_status_icons_init(void) {
@@ -53,6 +42,26 @@ int status_change_start_vip(struct block_list *bl, enum sc_type type, int tid, i
     // Display the icon above the character
     clif_status_change(bl, icon_id, 1, tick, 0, 0, 0);
     
+    // Display VIP icon in the buff area (right side of the screen)
+    // This requires setting the associated status effect ID
+    int efst_id = 0;
+    switch (type) {
+        case SC_VIP_BRONZE:
+            efst_id = EFST_VIP_BRONZE;
+            break;
+        case SC_VIP_SILVER:
+            efst_id = EFST_VIP_SILVER;
+            break;
+        case SC_VIP_GOLD:
+            efst_id = EFST_VIP_GOLD;
+            break;
+    }
+    
+    // Send packet to display in buff area
+    if (efst_id > 0) {
+        clif_status_change_single(bl, bl, efst_id, 1, tick, 0);
+    }
+    
     // Apply status effect
     sc_start4(bl, bl, type, 100, val1, val2, val3, val4, tick);
     
@@ -81,8 +90,55 @@ int status_change_end_vip(struct block_list *bl, enum sc_type type) {
             return 0;
     }
     
-    // Remove the icon from the character
+    // Remove the icon from above the character
     clif_status_change(bl, icon_id, 0, 0, 0, 0, 0);
     
+    // Remove VIP icon from the buff area (right side of the screen)
+    int efst_id = 0;
+    switch (type) {
+        case SC_VIP_BRONZE:
+            efst_id = EFST_VIP_BRONZE;
+            break;
+        case SC_VIP_SILVER:
+            efst_id = EFST_VIP_SILVER;
+            break;
+        case SC_VIP_GOLD:
+            efst_id = EFST_VIP_GOLD;
+            break;
+    }
+    
+    // Send packet to remove from buff area
+    if (efst_id > 0) {
+        clif_status_change_single(bl, bl, efst_id, 0, 0, 0);
+    }
+    
     return 1;
+}
+
+// Script command to apply VIP status
+// Usage: sc_vip <type>, <duration>;
+// Type: 1 = Bronze, 2 = Silver, 3 = Gold
+// Duration: time in seconds
+BUILDIN_FUNC(sc_vip) {
+    int type, duration;
+    struct map_session_data *sd;
+    
+    type = script_getnum(st, 2);
+    duration = script_getnum(st, 3);
+    
+    if (!script_rid2sd(sd))
+        return SCRIPT_CMD_FAILURE;
+        
+    enum sc_type sc_type;
+    switch(type) {
+        case 1: sc_type = SC_VIP_BRONZE; break;
+        case 2: sc_type = SC_VIP_SILVER; break;
+        case 3: sc_type = SC_VIP_GOLD; break;
+        default: return SCRIPT_CMD_FAILURE;
+    }
+    
+    // Apply VIP status
+    status_change_start_vip(&sd->bl, sc_type, 10000, 0, 0, 0, 0, duration * 1000, 0);
+    
+    return SCRIPT_CMD_SUCCESS;
 }
